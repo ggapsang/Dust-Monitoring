@@ -1,0 +1,19 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Docker image bundles (오프라인 배포용 산출물 — 레포에 넣지 않음)
+*.tar
+*.tar.gz
+*.tar.gz.sha256
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/

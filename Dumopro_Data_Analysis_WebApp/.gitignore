@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+build/
+dist/
+pip-wheel-metadata/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Node (not used in v0.1 but guard against future tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs / scratch
+*.log
+logs/
+tmp/
+*.tmp
+
+# Docker / local runtime
+.docker/
+docker-compose.override.yml
+
+# Jupyter (if ever used for ad-hoc analysis)
+.ipynb_checkpoints/
+
+# Project-local plans / notes (kept out of repo)
+/plans/
+/.claude/

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/admin/static/css/admin.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Top Nav ===== -->
+  <div class="topnav">
+    <div class="title">Decision Agent Admin</div>
+    <div class="right-actions">
+      <button class="btn btn-primary" id="btn-reload-roles">Reload role_mapping</button>
+      <button class="btn btn-primary" id="btn-reload-alarms">Reload alarm_mapping</button>
+    </div>
+  </div>
+
+  <!-- ===== Side (role_mapping + alarm_mapping) ===== -->
+  <div class="side">
+
+    <div class="panel" id="panel-roles">
+      <fieldset>
+        <legend>role_mapping</legend>
+        <table class="grid" id="tbl-roles">
+          <thead>
+            <tr><th>role</th><th>component</th><th>updated</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </fieldset>
+    </div>
+
+    <div class="resizer-y" id="rsy" title="drag to resize"></div>
+
+    <div class="panel" id="panel-alarms">
+      <fieldset>
+        <legend>alarm_mapping (8 rows)</legend>
+        <table class="grid" id="tbl-alarms">
+          <thead>
+            <tr><th>iot</th><th>static</th><th>dynamic</th><th>final</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </fieldset>
+    </div>
+
+    <!-- ===== Threshold (classification_threshold) — 좌측 최하단 패널 ===== -->
+    <div class="panel" id="panel-thresholds">
+      <fieldset>
+        <legend>Threshold</legend>
+        <table class="grid" id="tbl-thresholds">
+          <tbody>
+            <tr><th>IoT 센서</th><td><input type="number" step="0.1" id="th-dust" value="{{ th_dust }}"></td></tr>
+            <tr><th>정적분진</th><td><input type="number" step="0.1" id="th-static" value="{{ th_static }}"></td></tr>
+            <tr><th>동적분진</th><td><input type="number" step="0.1" id="th-dynamic" value="{{ th_dynamic }}"></td></tr>
+            <tr><td></td><td><button class="btn btn-primary" id="th-save">Edit</button></td></tr>
+          </tbody>
+        </table>
+      </fieldset>
+    </div>
+
+  </div>
+
+  <!-- ===== Vertical splitter between side and main ===== -->
+  <div class="resizer-x" id="rsx" title="drag to resize"></div>
+
+  <!-- ===== Main (decision_record browser) ===== -->
+  <div class="main">
+    <div class="tabbar">
+      <button class="tab-btn active" data-tab="recent">Recent</button>
+      <button class="tab-btn" data-tab="pending">Pending</button>
+      <button class="tab-btn" data-tab="stuck">Stuck (&gt; 5m)</button>
+      <span class="spacer"></span>
+      <span class="muted mono" id="tab-meta"></span>
+    </div>
+
+    <table class="grid" id="tbl-decisions">
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>station</th>
+          <th>obs ts</th>
+          <th>anomaly</th>
+          <th>object</th>
+          <th>sensor</th>
+          <th>final</th>
+          <th>decided_at</th>
+          <th>sent_at</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="pager">
+      <button class="btn" id="btn-prev">&larr; prev</button>
+      <span class="mono" id="pager-info">page 1</span>
+      <button class="btn" id="btn-next">next &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ===== Status Bar ===== -->
+  <div class="status">
+    <span id="st-pending">pending: -</span>
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <span id="st-decided">decided/h: -</span>
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <span id="st-stuck">stuck: -</span>
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <span id="st-cache">cache: alarm=- role=-</span>
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    DB: <span class="status-badge ok" id="st-db">OK</span>
+  </div>
+
+</div>
+
+<!-- ===== role_mapping edit modal ===== -->
+<div class="modal-overlay" id="modal-role">
+  <div class="modal-content">
+    <div class="modal-title">Edit role_mapping</div>
+    <div class="modal-row"><label>detection_role</label><span class="mono" id="mr-role"></span></div>
+    <div class="modal-row">
+      <label>component</label>
+      <select id="mr-component">
+        <option value="anomaly_detection">anomaly_detection</option>
+        <option value="object_detection">object_detection</option>
+        <option value="sensor_analysis">sensor_analysis</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-modal-close="modal-role">Cancel</button>
+      <button class="btn btn-primary" id="mr-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== alarm_mapping edit modal ===== -->
+<div class="modal-overlay" id="modal-alarm">
+  <div class="modal-content">
+    <div class="modal-title">Edit alarm_mapping</div>
+    <div class="modal-row"><label>id</label><span class="mono" id="ma-id"></span></div>
+    <div class="modal-row"><label>iot</label><span class="mono" id="ma-iot"></span></div>
+    <div class="modal-row"><label>static</label><span class="mono" id="ma-static"></span></div>
+    <div class="modal-row"><label>dynamic</label><span class="mono" id="ma-dynamic"></span></div>
+    <div class="modal-row">
+      <label>final_decision</label>
+      <select id="ma-final">
+        <option value="normal">normal</option>
+        <option value="caution">caution</option>
+        <option value="warning">warning</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-modal-close="modal-alarm">Cancel</button>
+      <button class="btn btn-primary" id="ma-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== force decide modal ===== -->
+<div class="modal-overlay" id="modal-force">
+  <div class="modal-content">
+    <div class="modal-title">Force Decide (manual override)</div>
+    <div class="modal-row"><label>id</label><span class="mono" id="mf-id"></span></div>
+    <div class="modal-row"><label>station</label><span class="mono" id="mf-station"></span></div>
+    <div class="modal-row"><label>anomaly</label><span class="mono" id="mf-anomaly"></span></div>
+    <div class="modal-row"><label>object</label><span class="mono" id="mf-object"></span></div>
+    <div class="modal-row"><label>sensor</label><span class="mono" id="mf-sensor"></span></div>
+    <div class="modal-row">
+      <label>final_decision</label>
+      <select id="mf-final">
+        <option value="normal">normal</option>
+        <option value="caution">caution</option>
+        <option value="warning">warning</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-modal-close="modal-force">Cancel</button>
+      <button class="btn btn-danger" id="mf-save">Force decide</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/admin/static/js/admin.js"></script>
+</body>
+</html>

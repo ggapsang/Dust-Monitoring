@@ -1,0 +1,80 @@
+# Decision Agent — Development compose file
+# ----------------------------------------------
+# Owns:
+#   postgres-decision  Decision DB (host port 2346 → 5432)
+#   decision-agent     Polling agent + admin HTTP server (port 9107)
+#
+# Network: SocketDaim's `gw-net` (external). 그쪽 compose가 먼저 떠서
+# 네트워크가 존재해야 함. Egress가 같은 네트워크 위에서 postgres-decision
+# 컨테이너명으로 접속한다.
+#
+# Bring up:
+#   cd C:\SocketDaim   && docker compose up -d   # gw-net 생성
+#   cd C:\decision_agent && docker compose up -d --build
+
+services:
+
+  postgres-decision:
+    image: postgres:16
+    container_name: da-postgres-decision
+    environment:
+      POSTGRES_DB: decision_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev_root_pw
+    ports:
+      - "2346:5432"
+    volumes:
+      - ./init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+      - ./seed_mapping.sql:/docker-entrypoint-initdb.d/02_seed_mapping.sql:ro
+      # seed_test_decisions.sql(ST-001~004 더미)은 마운트하지 않는다 → 실데이터만 적재.
+      # 필요 시 수동 적용: psql -U postgres -d decision_db -f seed_test_decisions.sql
+      - decision-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d decision_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - gw-net
+
+  decision-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: da-decision-agent
+    environment:
+      DA_DB_HOST: "postgres-decision"
+      DA_DB_PORT: "5432"
+      DA_DB_NAME: "decision_db"
+      DA_DB_USER: "decision_agent_role"
+      DA_DB_PASSWORD: "dev_decision_pw"
+      # Read-only gateway_db (SocketDaim) for the admin station-label (별명)
+      # lookup. Host = sd-postgres container on the shared gw-net. If
+      # unreachable the station column falls back to 'TGT-?' (non-fatal).
+      DA_GATEWAY_DB_HOST: "sd-postgres"
+      DA_GATEWAY_DB_PORT: "5432"
+      DA_GATEWAY_DB_NAME: "gateway_db"
+      DA_GATEWAY_DB_USER: "gw_reader"
+      DA_GATEWAY_DB_PASSWORD: "dev_reader_pw"
+      DA_POLL_INTERVAL_SEC: "5"
+      DA_BATCH_SIZE: "100"
+      DA_ROLE_REFRESH_SEC: "300"
+      DA_ADMIN_HOST: "0.0.0.0"
+      DA_ADMIN_PORT: "9107"
+      DA_LOG_LEVEL: "INFO"
+      DA_LOG_FORMAT: "json"
+    ports:
+      - "9107:9107"
+    depends_on:
+      postgres-decision:
+        condition: service_healthy
+    networks:
+      - gw-net
+
+volumes:
+  decision-pgdata:
+
+networks:
+  gw-net:
+    external: true
+    name: socketdaim_gw-net

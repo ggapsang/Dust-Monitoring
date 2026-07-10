@@ -1,0 +1,109 @@
+# Dumopro Data Analysis — docker compose
+# ---------------------------------------------------------------------------
+# Services
+#   dumopro-redis   : 캐시 + pub/sub 브로커. 호스트 6380 (Autoencoder Redis 6379와 분리)
+#   dumopro-poller  : 공용 Postgres 폴링, Redis 적재. 호스트 9106 (health)
+#   dumopro-api     : REST + SSE + 정적 프론트. 호스트 9105
+#
+# 전제 조건
+#   1) SocketDaim Gateway가 먼저 떠 있어야 합니다. `socketdaim_gw-net` 네트워크와
+#      `sd-postgres` 컨테이너를 만들어 주기 때문에 본 앱은 여기에 붙어 DB를 읽습니다.
+#        cd c:/SocketDaim && docker compose up -d
+#
+#   2) 외부 네트워크 이름이 다르면 (SocketDaim 프로젝트 폴더 이름이 다르면) env로 주입:
+#        GW_NET_NAME=다른이름_gw-net docker compose up -d
+#      또는 루트 `.env` 파일에 `GW_NET_NAME=...` 저장. 기본값은 socketdaim_gw-net.
+#      실제 네트워크 이름은 `docker network ls | grep gw-net`로 확인.
+#
+# 기동
+#   루트에서:   docker compose up --build -d          (루트 docker-compose.yml가 이 파일을 include)
+#   직접:       docker compose -f docker/docker-compose.yml --env-file .env.example up --build -d
+#
+# 정리
+#   중지:               docker compose down
+#   볼륨까지 초기화:    docker compose down -v        (Redis 데이터 삭제 → 다음 기동 시 cold start 재실행)
+#
+# 접속
+#   Web UI      : http://localhost:9105/
+#   API health  : http://localhost:9105/api/health
+#   Poller health: http://localhost:9106/health
+#   Redis       : localhost:6380 (redis-cli -p 6380)
+# ---------------------------------------------------------------------------
+
+name: dumopro
+
+services:
+
+  dumopro-redis:
+    image: redis:7-alpine
+    container_name: dumopro-redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./redis.conf:/etc/redis/redis.conf:ro
+      - dumopro-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - gw-net
+
+  dumopro-poller:
+    build:
+      context: ..
+      dockerfile: apps/poller/Dockerfile
+    container_name: dumopro-poller
+    environment:
+      PG_DSN: "postgresql://gw_reader:dev_reader_pw@postgres:5432/gateway_db"
+      REDIS_URL: "redis://dumopro-redis:6379/0"
+      POLL_INTERVAL_SEC: "1.5"
+      POLL_BATCH_LIMIT: "500"
+      STATION_REFRESH_SEC: "600"
+      MEASUREMENT_TYPE: "dust_concentration"
+      POLLER_HEALTH_PORT: "9106"
+      # Source tables — default = LOAS 호환 VIEW.  Standard 모드 SocketDaim 와
+      # 함께 운용하려면 STATION_SOURCE="station", SAMPLE_SOURCE="sensor_sample"
+      # 로 오버라이드.
+      STATION_SOURCE: "v_loas_stations"
+      SAMPLE_SOURCE:  "v_loas_sensor_sample"
+    ports:
+      - "9106:9106"
+    depends_on:
+      dumopro-redis:
+        condition: service_healthy
+    networks:
+      - gw-net
+
+  dumopro-api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: dumopro-api
+    environment:
+      PG_DSN: "postgresql://gw_reader:dev_reader_pw@postgres:5432/gateway_db"
+      REDIS_URL: "redis://dumopro-redis:6379/0"
+      API_PORT: "9105"
+      MEASUREMENT_TYPE: "dust_concentration"
+      # Source tables — default = LOAS 호환 VIEW (poller 와 일치해야 함)
+      STATION_SOURCE: "v_loas_stations"
+      SAMPLE_SOURCE:  "v_loas_sensor_sample"
+    ports:
+      - "9105:9105"
+    depends_on:
+      dumopro-redis:
+        condition: service_healthy
+      dumopro-poller:
+        condition: service_healthy
+    networks:
+      - gw-net
+
+volumes:
+  dumopro-redis-data:
+
+networks:
+  gw-net:
+    external: true
+    name: ${GW_NET_NAME:-socketdaim_gw-net}

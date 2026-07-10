@@ -1,0 +1,299 @@
+/* Decision Agent Admin — Win9x/2000 classic style.
+   Tokens follow refs/design_guideline.md. Forbidden:
+   rounded corners, drop shadows, gradients, animations. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #ffffff;
+  color: #000000;
+  font-family: "MS Sans Serif", "Tahoma", sans-serif;
+  font-size: 12px;
+}
+
+body { overflow: hidden; }
+
+a { color: #000080; }
+
+/* ----- 5-area grid ------------------------------------------------------ */
+
+:root {
+  --side-w: 380px;     /* sidebar column width   (overridden by drag) */
+  --top-h: 1fr;        /* top panel height in side (1fr = equal split) */
+  --resizer-size: 4px;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: var(--side-w) var(--resizer-size) 1fr;
+  grid-template-rows: 32px 1fr 24px;
+  grid-template-areas:
+    "topnav  topnav  topnav"
+    "side    rsx     main"
+    "status  status  status";
+  height: 100vh;
+}
+
+.topnav  { grid-area: topnav;  border-bottom: 1px solid #999; background: #e0e0e0; padding: 4px 8px; display: flex; align-items: center; justify-content: space-between; }
+.side    { grid-area: side;    display: grid; grid-template-rows: var(--top-h) var(--resizer-size) 1fr auto; min-height: 0; min-width: 0; }
+.main    { grid-area: main;    padding: 6px 8px; min-height: 0; min-width: 0; overflow: auto; }
+.status  { grid-area: status;  border-top: 1px solid #999; background: #e0e0e0; padding: 4px 8px; font-family: "Courier New", monospace; font-size: 11px; color: #444; }
+
+.side > .panel { min-height: 0; min-width: 0; overflow: auto; }
+
+/* ----- splitters / resizers -------------------------------------------- */
+
+.resizer-x,
+.resizer-y {
+  background: #d4d0c8;
+  user-select: none;
+}
+
+.resizer-x {
+  grid-area: rsx;
+  cursor: col-resize;
+  border-left: 1px solid #999;
+  border-right: 1px solid #999;
+}
+
+.resizer-y {
+  cursor: row-resize;
+  border-top: 1px solid #999;
+  border-bottom: 1px solid #999;
+}
+
+/* while dragging, prevent text selection app-wide */
+body.resizing { user-select: none; cursor: col-resize; }
+body.resizing.row { cursor: row-resize; }
+
+.title { font-weight: bold; }
+
+/* ----- fieldset panels -------------------------------------------------- */
+
+fieldset {
+  border: 1px solid #999;
+  margin: 4px;
+  padding: 4px 6px;
+}
+
+legend {
+  font-weight: bold;
+  padding: 0 4px;
+}
+
+/* ----- buttons ---------------------------------------------------------- */
+
+.btn {
+  border: 2px outset #c0c0c0;
+  background: #d4d0c8;
+  color: #000;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.btn:active                 { border-style: inset; }
+.btn:disabled               { color: #888; cursor: default; }
+
+.btn-primary                { font-weight: bold; }
+.btn-secondary              { /* default look */ }
+.btn-danger                 { color: #a00000; }
+
+.topnav .btn + .btn         { margin-left: 4px; }
+
+/* ----- tables ----------------------------------------------------------- */
+
+table.grid {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+
+table.grid th,
+table.grid td {
+  border: 1px solid #ccc;
+  padding: 2px 6px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.grid thead th {
+  background: #ddd;
+  border: 1px solid #999;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+table.grid tbody tr:nth-child(even) td { background: #f5f5f5; }
+
+table.grid tbody tr.clickable           { cursor: pointer; }
+table.grid tbody tr.clickable:hover td  { background: #cde; }
+
+/* ----- judgment + status badges ---------------------------------------- */
+
+.judgment-badge {
+  display: inline-block;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid #999;
+  background: #fff;
+  min-width: 60px;
+  text-align: center;
+}
+
+.judgment-badge.normal  { color: #000; }
+.judgment-badge.caution { color: #c90; }
+.judgment-badge.warning { color: #a00000; font-weight: bold; }
+.judgment-badge.pending { color: #666; }
+
+.status-badge {
+  display: inline-block;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid #999;
+  background: #fff;
+}
+
+.status-badge.ok   { color: #000; }
+.status-badge.down { color: #a00000; font-weight: bold; }
+.status-badge.warn { color: #c90; }
+
+/* ----- tabs ------------------------------------------------------------- */
+
+.tabbar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #999;
+  margin-bottom: 4px;
+}
+
+.tab-btn {
+  border: 1px solid #999;
+  border-bottom: none;
+  background: #d4d0c8;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 12px;
+  cursor: pointer;
+  color: #000;
+}
+
+.tab-btn.active {
+  background: #fff;
+  font-weight: bold;
+  position: relative;
+  top: 1px;
+}
+
+/* ----- pagination ------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: #444;
+}
+
+/* ----- modal ------------------------------------------------------------ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+
+.modal-content {
+  background: #fff;
+  border: 2px solid #999;
+  min-width: 320px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.modal-title {
+  font-weight: bold;
+  border-bottom: 1px solid #999;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.modal-row { margin: 4px 0; }
+
+.modal-row label {
+  display: inline-block;
+  width: 110px;
+  color: #444;
+}
+
+.modal-row input,
+.modal-row select {
+  border: 1px solid #999;
+  background: #fff;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  padding: 1px 4px;
+  min-width: 160px;
+}
+
+.modal-actions {
+  margin-top: 8px;
+  text-align: right;
+}
+
+.modal-actions .btn + .btn { margin-left: 4px; }
+
+/* ----- toast ------------------------------------------------------------ */
+
+#toast-container {
+  position: fixed;
+  bottom: 32px;
+  right: 12px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.toast {
+  border: 1px solid #999;
+  background: #ffffe0;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #000;
+  min-width: 200px;
+}
+
+.toast.error   { background: #ffe0e0; color: #a00000; }
+.toast.success { background: #e0ffe0; color: #006000; }
+
+/* ----- helpers ---------------------------------------------------------- */
+
+.muted   { color: #666; }
+.danger  { color: #a00000; }
+.warn    { color: #c90; }
+.mono    { font-family: "Courier New", monospace; }
+.right   { text-align: right; }
+.center  { text-align: center; }
+.spacer  { flex: 1 1 auto; }
+.right-actions { display: flex; align-items: center; }
+
+/* ===== Threshold 패널 (classification_threshold) — 좌측 최하단, 세로 배치 ===== */
+#panel-thresholds { overflow: auto; }
+#tbl-thresholds th { text-align: left; white-space: nowrap; width: 1%; padding-right: 8px; }
+#tbl-thresholds input { width: 100%; box-sizing: border-box; padding: 1px 3px; }

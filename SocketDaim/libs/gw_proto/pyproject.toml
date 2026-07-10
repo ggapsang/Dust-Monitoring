@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gw-proto"
+version = "0.1.0"
+description = "Gateway Protocol library – codec, framing, and TCP transport for SocketDaim"
+requires-python = ">=3.11"
+# No external dependencies – stdlib only (asyncio, struct, json, enum, dataclasses, uuid)
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23"]

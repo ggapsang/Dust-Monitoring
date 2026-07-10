@@ -1,0 +1,137 @@
+Tfoi v4a 
+
+CCTV (Protocol)
+
+  1. TCP/IP (Port)
+  2.   ,    9byte , jpg 
+
+        jpg .
+Tfoi v4a 
+
+CCTV (Protocol)
+
+  1. TCP/IP
+  2.   ,    9byte , jpg 
+
+        jpg .
+  3.    5byte, 4byte   or Display .
+
+                {
+                   public:
+                      char m_type[5] = { 'V', `7', `2', `0', `p' };// ex) V1080, V720p, V640p
+                      uint32_tm_len = 0;
+
+                };
+
+640x480  720p  1080p
+03
+
+: Protocol
+Tfoi v4a 
+
+(Protocol)
+
+   1. TCP/IP ()
+   2. 12 byte Header1448byte Body
+   3. Body(Data)XML , 
+
+                 Name  Data Type   Data                                                                Description                Comment
+sop                       uint16  0xaabb   Start of Packet (Must Be : 0xaabb)
+id                        uint16  0xd002   Dust Equipment Control Status                                                           Header
+ver                       uint8    0x02    The protocol version of the DataObjectID(0xd002)                                        (12byte)
+encryption                uint8            Encryption status (0: Unencrypted, 1: Encrypted)
+timestamp                uint32     0x00   UTC Timestamp(Range: 0 to 4,294,967,295 / 1970-01-01 00:00:00 ~ 2106-02-07 06:28:15)
+                                      -    DataObject Length(Excluding DataObject Header), , Max : 1,448 bytes / 0x05ac, 1,460 -
+length                    uint16          12
+                                      -    Data (Max : 1448 bytes)
+data                      uint8
+                                      -
+Tfoi v4a                                                ---------------+------+------+-------+---------+--------
+
+(Protocol)                                              Alram State | Bit1 | Bit0 | 2-bit | Hex | Decimal
+
+   4. Xml                                               ---------------+------+------+-------+---------+--------
+
+ <ELEMENT>                                              No alarm  | 1 | 1 | 11 | 0x0003 | 3
+    <CMD_ID>DUST_INSPECTION_INFOR</CMD_ID>
+    <DUST_DATA>0.0400</DUST_DATA>                       ALERT     | 1 | 0 | 10 | 0x0002 | 2
+    <DUST_ALRAM>3</DUST_ALRAM>
+    <DATETIME>2026 -05 -23 18:30:00.000000</DATETIME>   Maintenance | 0 | 1 | 01 | 0x0001 | 1
+
+ <SENSOR_TYPE>3</SENSOR_TYPE>                           ALARM(Fault) | 0 | 0 | 00 | 0x0000 | 0
+    <SENSOR_INDEX>1</SENSOR_INDEX>
+    <TARGET_INDEX>1</TARGET_INDEX>                      1) Text Error  LOAS DBInsert
+    <WAYPOINT_X>12.345</WAYPOINT_X>                          
+    <WAYPOINT_Y>67.890</WAYPOINT_Y>
+    <WAYPOINT_Z>0.000</WAYPOINT_Z>                      2) DB Table LOAS Insert 
+    <LOCATION_ID>1</LOCATION_ID>
+    <MAP_ID>1</MAP_ID>
+    <NAVIGATION_ID>1</NAVIGATION_ID>
+    <EXEC_ID>1001</EXEC_ID>
+    <PLANT_ID>1</PLANT_ID>
+    <TARGET_ID>1</TARGET_ID>
+    <UGV_ID>1</UGV_ID>
+    <WAYPOINT_ID>1</WAYPOINT_ID>
+    <INSPECTION_LOACL_ID>1000001</INSPECTION_LOACL_ID>
+    <INSPECTION_PAN>0</INSPECTION_PAN>
+    <INSPECTION_TILT>0</INSPECTION_TILT>
+    <INSPECTION_LIFT>0</INSPECTION_LIFT>
+    <OBJECT_ID>1</OBJECT_ID>
+    <ROT_X>0.000</ROT_X>
+    <ROT_Y>0.000</ROT_Y>
+    <ROT_Z>0.000</ROT_Z>
+    <ROT_W>1.000</ROT_W>
+    <MISSION_ID>1734498123456</MISSION_ID>
+
+ </ELEMENT>
+Tfoi v4a 
+
+(Protocol)
+
+   4. XML .
+     -XML 
+
+          <ELEMENT>
+             <CMD_ID>DUST_INSPECTION_INFOR</CMD_ID>
+             <DUST_DATA>0.0400</DUST_DATA>
+             <DUST_ALRAM>3</DUST_ALRAM>
+             <DATETIME>2026 -05 -23 18:30:00.000000</DATETIME>
+
+          <SENSOR_TYPE>3</SENSOR_TYPE>
+             <SENSOR_INDEX>1</SENSOR_INDEX>
+             <TARGET_INDEX>1</TARGET_INDEX>
+             <WAYPOINT_X>12.345</WAYPOINT_X>
+             <WAYPOINT_Y>67.890</WAYPOINT_Y>
+             <WAYPOINT_Z>0.000</WAYPOINT_Z>
+             <LOCATION_ID>1</LOCATION_ID>
+             <MAP_ID>1</MAP_ID>
+             <NAVIGATION_ID>1</NAVIGATION_ID>
+             <EXEC_ID>1001</EXEC_ID>
+             <PLANT_ID>1</PLANT_ID>
+             <TARGET_ID>1</TARGET_ID>
+             <UGV_ID>1</UGV_ID>
+             <WAYPOINT_ID>1</WAYPOINT_ID>
+             <INSPECTION_LOACL_ID>1000001</INSPECTION_LOACL_ID>
+             <INSPECTION_PAN>0</INSPECTION_PAN>
+             <INSPECTION_TILT>0</INSPECTION_TILT>
+             <INSPECTION_LIFT>0</INSPECTION_LIFT>
+             <OBJECT_ID>1</OBJECT_ID>
+             <ROT_X>0.000</ROT_X>
+             <ROT_Y>0.000</ROT_Y>
+             <ROT_Z>0.000</ROT_Z>
+             <ROT_W>1.000</ROT_W>
+             <MISSION_ID>1734498123456</MISSION_ID>
+
+          </ELEMENT>
+Tfoi v4a 
+
+(Protocol)
+
+   5. 
+
+                                                               12 byte Header
+                                                                        +
+
+                                                         1,448byte XML 
+                                                                 Body 
+

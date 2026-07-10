@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Type checking / Lint / Test caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Environment / Secrets
+.env
+.env.*
+*.env.local
+
+# Storage (runtime data)
+/data/
+/storage/
+
+# Model weights / large binaries
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt

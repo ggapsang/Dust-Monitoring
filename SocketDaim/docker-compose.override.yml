@@ -1,0 +1,36 @@
+# 로컬 테스트 전용 오버라이드 — git 커밋 금지(.gitignore 처리됨).
+# 실제 LOAS MariaDB 대용 mock(loas-mariadb) + egress 접속계정 주입.
+# `docker compose up` 시 base(docker-compose.yml)에 자동 병합된다.
+# ⚠️ 운영에서는 이 파일을 두지 말고 실제 LOAS DB 로 EGW_TARGET_DB_* 를 주입할 것.
+services:
+
+  egress-gw:
+    environment:
+      EGW_TARGET_DB_USER: "daimresearch"
+      EGW_TARGET_DB_PASSWORD: "daimresearch1234!"
+    depends_on:
+      loas-mariadb:
+        condition: service_healthy
+
+  loas-mariadb:
+    image: mariadb:11
+    container_name: loas-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: root_pw
+      MARIADB_DATABASE: tfoi_web_db_v1
+    volumes:
+      - ./loas_mariadb_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - loas-mariadb-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+volumes:
+  loas-mariadb-data:

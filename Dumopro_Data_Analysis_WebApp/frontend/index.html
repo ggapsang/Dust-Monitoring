@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Dumopro Data Analysis</title>
+  <link rel="stylesheet" href="/css/classic.css">
+</head>
+<body>
+  <div id="shell">
+    <div id="sidebar">
+      <h1>Dumopro Analysis</h1>
+      <fieldset class="sidebar-section">
+        <legend>Status</legend>
+        <div id="status">Loading...</div>
+      </fieldset>
+      <fieldset class="sidebar-section">
+        <legend>Stations sync</legend>
+        <div class="sync-row">
+          <button id="btn-sync-now">Sync now</button>
+          <span class="sync-status" id="sync-status">last: -</span>
+        </div>
+        <div class="conflict-banner" id="conflict-banner" style="display:none">
+          <a id="conflict-link">⚠ N stations need decision</a>
+        </div>
+      </fieldset>
+      <fieldset class="sidebar-section">
+        <legend>Settings</legend>
+        <div id="settings-root" class="muted">Loading...</div>
+      </fieldset>
+      <fieldset class="sidebar-section">
+        <legend>Regression</legend>
+        <div class="muted">상세 탭에서 실행</div>
+      </fieldset>
+      <fieldset class="sidebar-section">
+        <legend>Legend</legend>
+        <div style="font-size:11px; line-height:1.6">
+          <div><span style="display:inline-block;width:10px;height:10px;background:#6b96c8;border:1px solid #1a1a1a;vertical-align:middle"></span> Q1~Q3 (frozen)</div>
+          <div><span style="display:inline-block;width:10px;height:10px;background:#c6c0a0;border:1px solid #1a1a1a;vertical-align:middle"></span> Q1~Q3 (live)</div>
+          <div><span style="color:#c89040">●</span> Outlier</div>
+          <div><span style="color:#a00000">+</span> Extreme</div>
+          <div><span style="color:#1a7a3a">──</span> MA7</div>
+        </div>
+      </fieldset>
+      <fieldset class="sidebar-section">
+        <legend>수집 중</legend>
+        <div id="active-station" class="idle">(없음)</div>
+      </fieldset>
+    </div>
+
+    <div id="main">
+      <div id="tabbar">
+        <div class="tab active">Grid</div>
+      </div>
+      <div id="tabcontent">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Conflict resolution modal -->
+  <div class="modal-overlay" id="conflict-modal">
+    <div class="modal-content" style="min-width:480px; max-width:720px">
+      <div class="modal-title">개소 재등록 감지</div>
+      <div class="muted" style="font-size:11px; margin-bottom:6px">
+        같은 이름의 개소가 새로운 station_id로 다시 등록됐습니다.
+        이전 차트 데이터를 이어서 볼지, 새로 시작할지 선택하세요.
+      </div>
+      <div id="conflict-list"></div>
+      <div class="modal-actions">
+        <button data-modal-close="conflict-modal">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+  <script>
+    (async () => {
+      try {
+        const r = await fetch('/api/health').then(x => x.json());
+        document.getElementById('status').textContent =
+          'API: ' + r.status + ' | Redis: ' + r.redis;
+      } catch (err) {
+        const s = document.getElementById('status');
+        s.textContent = 'Error: ' + err.message;
+        s.className = 'err';
+      }
+    })();
+  </script>
+</body>
+</html>

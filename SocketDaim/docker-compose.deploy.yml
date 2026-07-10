@@ -1,0 +1,250 @@
+# SocketDaim Gateway – 폐쇄망 배포용 compose
+# -------------------------------------------
+# c:\project\SocketDaim\docker-compose.yml (dev) 의 폐쇄망 변종.
+# 유일한 차이: 각 자체빌드 서비스의 build: → image:+pull_policy:never.
+# 외부망에서 docker save 로 추출한 이미지 tar 들을 서버에서 docker load 후
+# 이 compose 로 기동한다.
+#
+# 부팅 (서버):
+#   cd <socketdaim_root>
+#   for t in images/*.tar; do docker load -i "$t"; done
+#   docker compose -f docker-compose.deploy.yml up -d
+
+services:
+
+  postgres:
+    image: postgres:16
+    pull_policy: never
+    container_name: sd-postgres
+    environment:
+      POSTGRES_DB: gateway_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev_root_pw
+    # 메모리 한도(4G) 안에서 안전하게 동작하도록 postgres 내부 메모리 캡 설정.
+    # 단일 AMR · 1 fps 환경 기준 — 1~2년 운영에 충분.
+    # shared_buffers=1G (25%), effective_cache_size=3G (75%),
+    # work_mem=32MB, maintenance_work_mem=256MB, max_connections=30.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=30
+    ports:
+      - "2345:5432"
+    volumes:
+      - ./init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gateway_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  ingestion-gw:
+    image: socketdaim-ingestion-gw:latest
+    pull_policy: never
+    container_name: sd-ingestion-gw
+    user: "1000:1000"
+    environment:
+      IGW_TCP_HOST: "0.0.0.0"
+      # ---- Protocol selector -----------------------------------------
+      # "loas" (default)  → dual listener on 13310 (DUST) + 13320 (CCTV);
+      #                     IGW_TCP_PORT (9000) is ignored.
+      # "standard"        → legacy gw_proto on IGW_TCP_PORT (9000), for
+      #                     MockSensor / Dumopro analysis flow.
+      IGW_PROTOCOL: "loas"
+      IGW_TCP_PORT: "9000"                    # only used when PROTOCOL=standard
+      IGW_DB_HOST: "postgres"
+      IGW_DB_PORT: "5432"
+      IGW_DB_NAME: "gateway_db"
+      IGW_DB_USER: "gw_writer"
+      IGW_DB_PASSWORD: "dev_writer_pw"
+      IGW_STORAGE_ROOT: "/data/storage"
+      IGW_LOG_LEVEL: "INFO"
+      IGW_LOG_FORMAT: "json"
+      # ---- LOAS Tfoi v4a (single-AMR) overrides ----------------------
+      # Default ports match application defaults in config.py.
+      # IGW_LOAS_DUST_PORT: "13310"
+      # IGW_LOAS_CCTV_PORT: "13320"
+      # IGW_LOAS_AMR_ID: "amr-01"
+      # IGW_LOAS_EXPECTED_AMR_IP: ""
+      # IGW_LOAS_WINDOW_BEFORE_SEC: "2.0"
+      # IGW_LOAS_WINDOW_AFTER_SEC:  "2.0"
+      # IGW_LOAS_CORRELATOR_INTERVAL_SEC: "10.0"
+      # IGW_LOAS_LOOKBACK_SEC: "600.0"
+      # ---- DUST raw-XML dump (디버깅, default off) -------------------
+      # IGW_LOAS_DUST_DUMP_ENABLED: "true"
+      # IGW_LOAS_DUST_DUMP_INTERVAL_SEC: "1.0"
+      # IGW_LOAS_DUST_DUMP_SUBDIR: "dust_dump"
+    ports:
+      - "13310:13310"                         # loas DUST  (Dumopro 분진 송신 대상)
+      - "13320:13320"                         # loas CCTV  (AMR 영상 송신 대상)
+      - "9000:9000"                           # standard   (idle when PROTOCOL=loas)
+    volumes:
+      - ./storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 256M
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  # ---- Egress Gateway -----------------------------------------------------
+  # decision_db(판정) polling → dust_id 로 gateway_db.dust_inspection 24컬럼 조인
+  # → LOAS MariaDB t_inspection 에 INSERT(권한 Insert+Select → upsert 불가).
+  # 실제 LOAS 접속값은 시크릿 주입(레포 평문 금지).  미가용 시 retry.
+  egress-gw:
+    image: socketdaim-egress-gw:latest
+    pull_policy: never
+    container_name: sd-egress-gw
+    restart: unless-stopped
+    environment:
+      # ↓ 타깃 LOAS MariaDB t_inspection (실제값 시크릿 주입)
+      EGW_TARGET_DB_HOST: "loas-mariadb"        # ← 10.5.21.141
+      EGW_TARGET_DB_PORT: "3306"
+      EGW_TARGET_DB_NAME: "tfoi_web_db_v1"
+      EGW_TARGET_DB_TABLE: "t_inspection"
+      EGW_TARGET_DB_USER: "loas_writer"         # ← 실제 계정
+      EGW_TARGET_DB_PASSWORD: "CHANGE_ME"       # ← 시크릿
+      EGW_DB_HOST: "postgres-decision"        # decision_agent 가 같이 배포되면 해당 컨테이너 명
+      EGW_DB_PORT: "5432"
+      EGW_DB_NAME: "decision_db"
+      EGW_DB_USER: "egress_role"
+      EGW_DB_PASSWORD: "dev_egress_pw"
+      # gateway_db (gw_reader) — dust_inspection 24컬럼
+      EGW_GW_DB_HOST: "postgres"
+      EGW_GW_DB_PORT: "5432"
+      EGW_GW_DB_NAME: "gateway_db"
+      EGW_GW_DB_USER: "gw_reader"
+      EGW_GW_DB_PASSWORD: "dev_reader_pw"
+      EGW_POLL_INTERVAL_SEC: "5"
+      EGW_BATCH_SIZE: "100"
+      EGW_OUTBOX_PATH: "/data/outbox.db"
+      EGW_LOG_LEVEL: "INFO"
+      EGW_LOG_FORMAT: "json"
+      # 디버깅: 기본값 true → t_inspection 으로 실행되는 INSERT 전체 구문을 로그로 남김.
+      EGW_SQL_LOG_ENABLE: "true"
+      # 조건부 INSERT: 허용 event_id 만 t_inspection 에 적재(normal=0/caution=1/warning=2/danger=3).
+      #   "0,1,2,3"=전부 적재(기본).  "2,3"=warning/danger 만.  "2"=warning 만.
+      EGW_EVENT_ID_FILTER: "0,1,2,3"
+    volumes:
+      - egress-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    networks:
+      - gw-net
+
+  # ---- Admin UI ------------------------------------------------------------
+  # gw_admin 롤로 station 테이블 CRUD + station_request 트리아지 제공.
+  # http://<server>:9108/
+  admin-ui:
+    image: socketdaim-admin-ui:latest
+    pull_policy: never
+    container_name: sd-admin-ui
+    environment:
+      SDA_HTTP_HOST: "0.0.0.0"
+      SDA_HTTP_PORT: "9108"
+      SDA_DB_HOST: "postgres"
+      SDA_DB_PORT: "5432"
+      SDA_DB_NAME: "gateway_db"
+      SDA_DB_USER: "gw_admin"
+      SDA_DB_PASSWORD: "dev_admin_pw"
+      SDA_STORAGE_ROOT: "/data/storage"
+      SDA_DISK_WARN_PERCENT: "80"
+      SDA_DISK_CRITICAL_PERCENT: "90"
+      SDA_LOG_LEVEL: "INFO"
+      SDA_LOG_FORMAT: "json"
+    ports:
+      - "9108:9108"
+    volumes:
+      - ./storage:/data/storage:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  # ---- sd-cleaner ----------------------------------------------------------
+  # gateway_plan.md §9.3 retention 정책을 매일 03:00 KST에 자동 적용.
+  # gw_cleaner 롤(SELECT + DELETE on video/sensor_sample/ingestion_log).
+  # 수동 실행: docker exec sd-cleaner python -m cleaner.main --once
+  cleaner:
+    image: socketdaim-cleaner:latest
+    pull_policy: never
+    container_name: sd-cleaner
+    user: "1000:1000"
+    environment:
+      SDC_DB_HOST: "postgres"
+      SDC_DB_PORT: "5432"
+      SDC_DB_NAME: "gateway_db"
+      SDC_DB_USER: "gw_cleaner"
+      SDC_DB_PASSWORD: "dev_cleaner_pw"
+      SDC_STORAGE_ROOT: "/data/storage"
+      SDC_VIDEO_NORMAL_DAYS: "14"
+      SDC_VIDEO_ANOMALY_DAYS: "180"
+      SDC_SENSOR_DAYS: "180"
+      SDC_INGESTION_LOG_DAYS: "180"
+      SDC_RUN_AT_HOUR_KST: "3"
+      SDC_RUN_AT_MINUTE_KST: "0"
+      SDC_BATCH_SIZE: "200"
+      # 디스크 압박 시 안전장치 (nightly 14일 정책으로는 못 막는 부하 폭주 대비).
+      SDC_EMERGENCY_PURGE_AT_PERCENT: "85"
+      SDC_EMERGENCY_TARGET_PERCENT: "70"
+      SDC_DISK_CHECK_INTERVAL_SEC: "300"
+      SDC_LOG_LEVEL: "INFO"
+      SDC_LOG_FORMAT: "json"
+    volumes:
+      - ./storage:/data/storage          # unlink 필요 → rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+volumes:
+  pgdata:
+  egress-data:
+
+networks:
+  gw-net:
+    driver: bridge

@@ -1,0 +1,90 @@
+# Dumopro Data Analysis — 폐쇄망(air-gap) compose
+# ---------------------------------------------------------------------------
+# docker/docker-compose.yml(dev) 의 폐쇄망 변종.
+# 유일한 차이: 자체빌드 서비스의 build: → image: + pull_policy: never.
+# (빌드/pull 없이 docker load 로 적재된 이미지만 사용)
+#
+# 사용 (이미지 docker load 이후, 빌드 없음):
+#   docker compose -f docker/docker-compose.deploy.yml up -d
+#
+# 필요한 적재 이미지:
+#   redis:7-alpine, dumopro-dumopro-poller:latest, dumopro-dumopro-api:latest
+# 전제: SocketDaim 먼저 기동(socketdaim_gw-net + sd-postgres). 네트워크명 다르면 GW_NET_NAME 주입.
+# ---------------------------------------------------------------------------
+
+name: dumopro
+
+services:
+
+  dumopro-redis:
+    image: redis:7-alpine
+    pull_policy: never
+    container_name: dumopro-redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./redis.conf:/etc/redis/redis.conf:ro
+      - dumopro-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - gw-net
+
+  dumopro-poller:
+    image: dumopro-dumopro-poller:latest
+    pull_policy: never
+    container_name: dumopro-poller
+    environment:
+      PG_DSN: "postgresql://gw_reader:dev_reader_pw@postgres:5432/gateway_db"
+      REDIS_URL: "redis://dumopro-redis:6379/0"
+      POLL_INTERVAL_SEC: "1.5"
+      POLL_BATCH_LIMIT: "500"
+      STATION_REFRESH_SEC: "600"
+      MEASUREMENT_TYPE: "dust_concentration"
+      # Source tables — default = LOAS 호환 VIEW.  Standard 모드 SocketDaim 와
+      # 함께 운용하려면 STATION_SOURCE="station", SAMPLE_SOURCE="sensor_sample"
+      # 로 오버라이드.
+      STATION_SOURCE: "v_loas_stations"
+      SAMPLE_SOURCE:  "v_loas_sensor_sample"
+      POLLER_HEALTH_PORT: "9106"
+    ports:
+      - "9106:9106"
+    depends_on:
+      dumopro-redis:
+        condition: service_healthy
+    networks:
+      - gw-net
+
+  dumopro-api:
+    image: dumopro-dumopro-api:latest
+    pull_policy: never
+    container_name: dumopro-api
+    environment:
+      PG_DSN: "postgresql://gw_reader:dev_reader_pw@postgres:5432/gateway_db"
+      REDIS_URL: "redis://dumopro-redis:6379/0"
+      API_PORT: "9105"
+      MEASUREMENT_TYPE: "dust_concentration"
+      # Source tables — default = LOAS 호환 VIEW (poller 와 일치해야 함)
+      STATION_SOURCE: "v_loas_stations"
+      SAMPLE_SOURCE:  "v_loas_sensor_sample"
+    ports:
+      - "9105:9105"
+    depends_on:
+      dumopro-redis:
+        condition: service_healthy
+      dumopro-poller:
+        condition: service_healthy
+    networks:
+      - gw-net
+
+volumes:
+  dumopro-redis-data:
+
+networks:
+  gw-net:
+    external: true
+    name: ${GW_NET_NAME:-socketdaim_gw-net}

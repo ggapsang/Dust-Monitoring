@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -Command \"C:\\\\ProgramData\\\\anaconda3\\\\Scripts\\\\conda.exe run -n socketdaim python -c 'import ingestion_gateway.handler.sensor_handler, ingestion_gateway.handler.video_handler; print\\(42\\)'\")",
+      "Bash(docker volume *)",
+      "Bash(docker exec *)",
+      "Bash(powershell.exe -Command \"C:\\\\ProgramData\\\\anaconda3\\\\Scripts\\\\conda.exe run -n socketdaim --no-capture-output python C:\\\\SocketDaim\\\\scripts\\\\send_sensor.py e3980e87-5393-4308-a82b-d903d60454e0 25.7\")",
+      "Bash(powershell.exe -Command \"C:\\\\ProgramData\\\\anaconda3\\\\Scripts\\\\conda.exe run -n socketdaim python C:\\\\SocketDaim\\\\_egress_import_check.py\")"
+    ]
+  }
+}

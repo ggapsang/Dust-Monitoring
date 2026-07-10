@@ -1,0 +1,81 @@
+# PoolerTran — 폐쇄망(air-gap) 배포용 compose
+# -------------------------------------------------
+# docker-compose.yml(dev) 의 폐쇄망 변종.  유일한 차이: build: → image: + pull_policy: never.
+# 외부망 빌드 PC 에서 `docker compose -f docker-compose.yml build` 후 `docker save` 로
+# 추출한 이미지(poolertran-poolertran:latest)를 서버에서 `docker load` 한 뒤 이 compose 로 기동.
+#
+# 선행 조건(서버):
+#   1) SocketDaim 이 먼저 떠서 gw-net + sd-postgres(gateway_db) 가 존재.
+#   2) gateway_db 에 migrate_010 적용 — 큐/트리거/cctv_forwarder 롤 생성:
+#        docker exec -i sd-postgres psql -U postgres -d gateway_db \
+#            < migrations/migrate_010_cctv_transfer_queue.sql
+#   3) decision_agent 가 떠서 decision_db(decision_record/transfer_dlq + sensor_analysis_role) 존재.
+#
+# 기동(서버):
+#   docker load -i images/poolertran.tar
+#   docker compose -f docker-compose.deploy.yml up -d
+
+services:
+
+  poolertran:
+    image: poolertran-poolertran:latest
+    pull_policy: never
+    container_name: poolertran
+    environment:
+      # gateway_db (gw-net 내부 sd-postgres) — 큐/소스 읽기 전용
+      PT_GW_DB_HOST: "postgres"
+      PT_GW_DB_PORT: "5432"
+      PT_GW_DB_NAME: "gateway_db"
+      PT_GW_DB_USER: "cctv_forwarder"
+      PT_GW_DB_PASSWORD: "dev_forwarder_pw"          # ★ 운영 시크릿으로 교체(migrate_010 롤 비번과 일치)
+      # 전송 모드: waypoint 단위 배치 → decision_record 생산 (현재 단독 지원)
+      PT_REST_MODE: "batch_paths"
+      # decision_db (결과 적재 — decision_record + transfer_dlq; detector 롤 재사용)
+      PT_DECISION_DB_HOST: "postgres-decision"       # ← decision_agent 의 decision_db 호스트
+      PT_DECISION_DB_PORT: "5432"
+      PT_DECISION_DB_NAME: "decision_db"
+      PT_DECISION_DB_USER: "sensor_analysis_role"
+      PT_DECISION_DB_PASSWORD: "dev_sensor_pw"       # ★ decision_agent init_db.sql 의 롤 비번과 일치
+      # REST 전송 대상 — AnalysisReceiver
+      PT_REST_URL: "http://analysis-receiver:8000/ingest"
+      PT_REST_TIMEOUT_SEC: "10"
+      # ⚠️ AnalysisReceiver 미배포 시 "true" → HTTP 없이 더미 dual 응답으로 decision_record 생성.
+      #    AnalysisReceiver 를 함께 띄우면 "false" 로만 바꾸면 됨(코드 변경 불필요).
+      PT_REST_DEMO: "true"
+      PT_REST_DEMO_SCORE: "0.5"
+      # 데모 버전: 1=정적/동적 고정 score, 2=waypoint별 프로필. 기본 1.
+      PT_REST_DEMO_VERSION: "1"
+      # 디버깅: true 면 REST 호출 입력(payload)·출력(response)을 로그로 남김. 기본 false.
+      PT_API_LOGGING: "false"
+      # 전송 payload file_path 경로 변환(컨테이너→호스트). 외부 수신서버가 접근할
+      #   호스트 실제 경로로 지정해야 함(운영 서버 경로로 수정). TO 가 비면 변환 안 함.
+      PT_PATH_REMAP_FROM: "/data/storage"
+      PT_PATH_REMAP_TO: "/home/daim/svc/SocketDaim/storage"
+      # 폴링 / 배치 / 재시도
+      PT_POLL_INTERVAL_SEC: "5"
+      PT_BATCH_SIZE: "100"
+      PT_MAX_ATTEMPTS: "10"
+      PT_USE_LISTEN: "false"
+      PT_INIT_WAYPOINT_ID: "-1"
+      PT_CLEAR_QUEUE_ON_START: "true"
+      PT_QUEUE_MAX_AGE_SEC: "21600"
+      PT_HEALTH_PORT: "9109"
+      PT_LOG_LEVEL: "INFO"
+      PT_LOG_FORMAT: "json"
+    volumes:
+      # image_b64 는 응답 path1(= 정적분석 결과 첫 이미지)을 읽어 인코딩한다.  실제 receiver 는
+      # path1 을 **호스트 절대경로**(/home/daim/svc/SocketDaim/storage/result/...)로 돌려주므로,
+      # 그 경로를 컨테이너에서 그대로 읽을 수 있게 **호스트 경로와 동일 경로**로 마운트한다(읽기 전용).
+      - /home/daim/svc/SocketDaim/storage:/home/daim/svc/SocketDaim/storage:ro
+      # (호환) /data/storage 형식 경로(데모 응답·리맵 이전 형식)도 읽을 수 있게 기존 마운트 유지.
+      - /home/daim/svc/SocketDaim/storage:/data/storage:ro
+    ports:
+      - "9109:9109"
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+networks:
+  gw-net:
+    external: true
+    name: socketdaim_gw-net      # SocketDaim 이 생성한 네트워크에 합류

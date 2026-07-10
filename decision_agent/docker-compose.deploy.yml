@@ -1,0 +1,81 @@
+# Decision Agent — 폐쇄망(air-gap) 배포용 compose
+# -------------------------------------------------
+# docker-compose.yml(dev) 의 폐쇄망 변종.  build: → image: + pull_policy: never.
+# 외부망에서 빌드(decision_agent-decision-agent:latest) + postgres:16 을 docker save →
+# 서버에서 docker load 후 이 compose 로 기동.
+#
+# 선행: SocketDaim 이 먼저 떠서 gw-net 이 존재해야 한다.
+#
+# 기동(서버):
+#   docker load -i images/postgres-16.tar
+#   docker load -i images/da-decision-agent.tar
+#   docker compose -f docker-compose.deploy.yml up -d
+
+services:
+
+  postgres-decision:
+    image: postgres:16
+    pull_policy: never
+    container_name: da-postgres-decision
+    environment:
+      POSTGRES_DB: decision_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev_root_pw
+    ports:
+      - "2346:5432"
+    volumes:
+      # 최초 기동 시 자동 실행: 스키마 + 롤 + 분류 임계 seed(dust=2 등).
+      - ./init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+      - ./seed_mapping.sql:/docker-entrypoint-initdb.d/02_seed_mapping.sql:ro
+      # seed_test_decisions.sql(ST-001~004 더미)은 마운트하지 않는다 → 실데이터만 적재.
+      - decision-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d decision_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  decision-agent:
+    image: decision_agent-decision-agent:latest
+    pull_policy: never
+    container_name: da-decision-agent
+    environment:
+      DA_DB_HOST: "postgres-decision"
+      DA_DB_PORT: "5432"
+      DA_DB_NAME: "decision_db"
+      DA_DB_USER: "decision_agent_role"
+      DA_DB_PASSWORD: "dev_decision_pw"
+      # Read-only gateway_db (SocketDaim) for the admin station-label (별명)
+      # lookup. Host = sd-postgres container on the shared gw-net. If
+      # unreachable the station column falls back to 'TGT-?' (non-fatal).
+      DA_GATEWAY_DB_HOST: "sd-postgres"
+      DA_GATEWAY_DB_PORT: "5432"
+      DA_GATEWAY_DB_NAME: "gateway_db"
+      DA_GATEWAY_DB_USER: "gw_reader"
+      DA_GATEWAY_DB_PASSWORD: "dev_reader_pw"
+      DA_POLL_INTERVAL_SEC: "5"
+      DA_BATCH_SIZE: "100"
+      DA_ROLE_REFRESH_SEC: "300"
+      DA_ADMIN_HOST: "0.0.0.0"
+      DA_ADMIN_PORT: "9107"
+      DA_LOG_LEVEL: "INFO"
+      DA_LOG_FORMAT: "json"
+    ports:
+      - "9107:9107"
+    depends_on:
+      postgres-decision:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+volumes:
+  decision-pgdata:
+
+networks:
+  gw-net:
+    external: true
+    name: socketdaim_gw-net

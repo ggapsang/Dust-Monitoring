@@ -1,0 +1,377 @@
+/* Dumopro Analysis — Refined Classic v2.0
+   단일 출처: design_guideline.md v2.0
+   금지: box-shadow, gradient, border-radius > 8px, 신규 색상 토큰. */
+
+/* ============================================================
+ * Design Tokens
+ * ============================================================ */
+:root {
+  /* 색상 — 기본 */
+  --color-bg:           #ffffff;
+  --color-bg-soft:      #fbfbfb;
+  --color-bg-muted:     #fafafa;
+  --color-bg-panel:     #f5f5f5;
+  --color-bg-header:    #f0f0f0;
+
+  /* 색상 — 텍스트 */
+  --color-text:         #1a1a1a;
+  --color-text-muted:   #555555;
+  --color-text-subtle:  #777777;
+
+  /* 색상 — 보더 */
+  --color-border:       #e2e2e2;
+  --color-border-strong:#d4d4d4;
+  --color-border-line:  #ececec;
+  --color-border-dark:  #999999;
+
+  /* 색상 — 액센트 (차트 팔레트와 공유, §7) */
+  --color-accent:       #6b96c8;
+  --color-accent-hover: #5a85b7;
+  --color-accent-soft:  #eaf0f6;
+  --color-accent-text:  #2c4a6b;
+
+  /* 색상 — 상태 */
+  --color-danger:       #a00000;
+  --color-danger-soft:  #f9e6e6;
+  --color-warn:         #c90;
+  --color-warn-text:    #7a5a14;
+  --color-warn-soft:    #fbf2dc;
+
+  /* 폰트 */
+  --font-body: 'Inter', 'Pretendard', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', Menlo, 'Courier New', monospace;
+
+  /* 폰트 크기 */
+  --fs-body:    13px;
+  --fs-table:   12.5px;
+  --fs-header:  11.5px;
+
+  /* 모서리 — 상한 8px */
+  --radius-panel: 8px;
+  --radius-card:  6px;
+  --radius-ctrl:  4px;
+  --radius-pill:  999px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  margin: 0;
+}
+
+h1 {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 6px 8px;
+  letter-spacing: -0.005em;
+}
+
+h2, h3 { font-weight: 500; margin: 6px 0; }
+
+fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: var(--color-bg);
+}
+
+legend {
+  font-weight: 500;
+  padding: 0 6px;
+  color: var(--color-text-subtle);
+  font-size: var(--fs-header);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+table { border-collapse: collapse; }
+
+td, th {
+  border-bottom: 1px solid var(--color-border-line);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+th {
+  background: var(--color-bg-header);
+  color: var(--color-text-subtle);
+  font-weight: 500;
+  font-size: var(--fs-header);
+  border-bottom: 1px solid var(--color-border);
+}
+
+input[type="text"], input[type="number"], select {
+  font-family: var(--font-mono);
+  font-size: var(--fs-table);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-ctrl);
+  padding: 3px 6px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+button, input[type="submit"] {
+  font-family: inherit;
+  font-size: var(--fs-table);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-ctrl);
+  background: #fff;
+  color: var(--color-text);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+button:hover, input[type="submit"]:hover { background: var(--color-bg-panel); }
+button:disabled { color: var(--color-text-subtle); background: var(--color-bg-panel); cursor: default; }
+
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--fs-header);
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ctrl);
+  padding: 8px;
+  overflow: auto;
+  max-height: 400px;
+}
+
+a { color: var(--color-accent-text); }
+.err { color: var(--color-danger); }
+
+/* Layout */
+#shell {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  width: 100vw;
+}
+
+#sidebar {
+  width: 260px;
+  min-width: 260px;
+  border-right: 1px solid var(--color-border);
+  padding: 8px;
+  overflow-y: auto;
+  background: var(--color-bg-soft);
+}
+
+#main {
+  flex: 1;
+  padding: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#tabbar {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+  gap: 2px;
+}
+
+.tab {
+  padding: 4px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-ctrl);
+  border-top-right-radius: var(--radius-ctrl);
+  background: var(--color-bg-panel);
+  color: var(--color-text);
+  font-size: var(--fs-header);
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #fff;
+  font-weight: 500;
+  color: var(--color-accent-text);
+}
+
+.tab .close {
+  margin-left: 6px;
+  color: var(--color-text-subtle);
+  font-weight: 500;
+}
+
+#tabcontent {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Grid of station cells */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cell {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  cursor: pointer;
+}
+
+.cell.offline {
+  background: var(--color-bg-panel);
+  color: var(--color-text-subtle);
+}
+
+/* Active station highlight (currently receiving samples). */
+.cell.active {
+  border: 1px solid var(--color-accent);
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+fieldset.active {
+  border: 1px solid var(--color-accent);
+  border-left: 2px solid var(--color-accent);
+}
+
+#active-station {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+#active-station.idle {
+  color: var(--color-text-subtle);
+  font-weight: normal;
+}
+
+.cell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-line);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.cell-stats {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--fs-header);
+  color: var(--color-text-muted);
+}
+
+/* Candle chart cell container (design_guideline §7) */
+.candle-cell {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: 8px;
+  background: #fff;
+}
+
+.canvas-wrap {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.cell .canvas-wrap {
+  flex: 1;
+  min-height: 180px;
+}
+
+canvas {
+  display: block;
+  /* width/height는 chart.js에서 픽셀 단위로 직접 지정 — 가로 스크롤을 위해 CSS에서 100%로 강제하지 않음 */
+}
+
+.sidebar-section { margin-bottom: 10px; }
+.sidebar-section label {
+  display: block;
+  margin: 3px 0;
+  font-size: var(--fs-header);
+  color: var(--color-text-muted);
+}
+
+.muted { color: #666; }
+
+/* Stations sync sidebar widget */
+.sync-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+.sync-status {
+  font: 11px "Courier New", monospace;
+  color: #666;
+}
+.conflict-banner {
+  margin-top: 4px;
+  font: 11px "MS Sans Serif", sans-serif;
+}
+.conflict-banner a {
+  color: #a00000;
+  font-weight: bold;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Modal (classic admin tone — solid borders, no rounding/shadow) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+
+.modal-content {
+  background: #ffffff;
+  border: 2px solid #000000;
+  min-width: 360px;
+  padding: 10px 12px;
+  font: 12px "MS Sans Serif", sans-serif;
+}
+
+.modal-title {
+  font-weight: bold;
+  border-bottom: 1px solid #000000;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.modal-actions {
+  margin-top: 8px;
+  text-align: right;
+}
+.modal-actions button + button { margin-left: 4px; }
+
+/* Conflict list inside the modal */
+.conflict-card {
+  border: 1px solid #000000;
+  padding: 4px 6px;
+  margin: 4px 0;
+}
+.conflict-card .meta {
+  font: 11px "Courier New", monospace;
+  color: #444;
+  margin-bottom: 4px;
+}
+.conflict-card .actions {
+  display: flex;
+  gap: 4px;
+}
+.conflict-card .actions .danger { color: #a00000; }

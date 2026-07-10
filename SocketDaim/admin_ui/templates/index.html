@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/admin/static/css/admin.css">
+  <link rel="stylesheet" href="/admin/static/css/socketdaim-admin.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Top Nav ===== -->
+  <div class="topnav">
+    <div class="title">SocketDaim 관리 (LOAS)</div>
+    <div class="right-actions">
+      <button class="btn" id="btn-refresh">새로고침</button>
+    </div>
+  </div>
+
+  <!-- ===== Side ===== -->
+  <div class="side">
+
+    <div class="panel" id="panel-summary">
+      <fieldset>
+        <legend>스토리지</legend>
+        <div class="stat-row"><span class="label">/data/storage</span><span class="value mono" id="stat-disk">- / -</span></div>
+        <div class="stat-row"><span class="label">사용률</span><span class="value mono" id="stat-disk-pct">-</span></div>
+        <div class="disk-bar"><div class="disk-fill" id="stat-disk-fill"></div></div>
+        <div class="stat-row"><span class="label">gateway_db</span><span class="value mono" id="stat-db-mb">- MB</span></div>
+        <div id="disk-banner" class="disk-banner" style="display:none"></div>
+        <div class="cleanup-row">
+          <button class="btn" id="btn-cleanup-now" title="sd-cleaner에 즉시 정리 신호를 보냅니다">지금 정리</button>
+          <span class="muted mono" id="cleanup-status"></span>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>관측 개소</legend>
+        <div class="stat-row"><span class="label">자동 발견</span><span class="value" id="stat-wp-total">-</span></div>
+        <div class="stat-row"><span class="label">라벨 등록</span><span class="value" id="stat-wp-labeled">-</span></div>
+        <div class="stat-row"><span class="label">미라벨</span><span class="value" id="stat-wp-unlabeled">-</span></div>
+      </fieldset>
+    </div>
+
+    <div class="resizer-y" id="rsy" title="drag to resize"></div>
+
+    <div class="panel" id="panel-errlog">
+      <fieldset>
+        <legend>최근 ingestion 에러 (20)</legend>
+        <ul class="errlog" id="errlog">
+          <li class="empty">loading...</li>
+        </ul>
+      </fieldset>
+      <fieldset>
+        <legend>실시간 수신 (LOAS · 최근 30)</legend>
+        <ul class="errlog" id="activity-log">
+          <li class="empty">loading...</li>
+        </ul>
+      </fieldset>
+      <fieldset>
+        <legend>
+          <label style="font-weight: normal;">
+            <input type="checkbox" id="dust-xml-toggle"> DUST XML 원본 보기 (off by default)
+          </label>
+        </legend>
+        <ul class="errlog" id="dust-xml-log">
+          <li class="empty">enable to view</li>
+        </ul>
+      </fieldset>
+    </div>
+
+  </div>
+
+  <!-- ===== Vertical splitter ===== -->
+  <div class="resizer-x" id="rsx" title="drag to resize"></div>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <div class="tabbar">
+      <span class="main-heading">관측 개소 (자동 발견 — LOAS target_id)</span>
+      <span class="spacer"></span>
+      <span class="muted mono" id="tab-meta"></span>
+    </div>
+
+    <table class="grid" id="tbl-waypoints">
+      <thead>
+        <tr>
+          <th>target_id</th>
+          <th>이름</th>
+          <th>위치</th>
+          <th class="num">samples</th>
+          <th>마지막 측정</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body">
+        <tr><td colspan="6" class="empty">로딩 중...</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+
+  <!-- ===== Status Bar ===== -->
+  <div class="status">
+    <span id="st-wp">waypoints: -</span>
+    &nbsp;|&nbsp;
+    <span id="st-labeled">labeled: -</span>
+    &nbsp;|&nbsp;
+    <span id="st-refreshed">refreshed: -</span>
+    &nbsp;|&nbsp;
+    DB: <span class="status-badge ok" id="st-db">OK</span>
+  </div>
+
+</div>
+
+<!-- ===== Waypoint label modal (LOAS) ===== -->
+<div class="modal-overlay" id="modal-waypoint">
+  <div class="modal-content">
+    <div class="modal-title">관측 개소 라벨</div>
+    <div class="modal-row"><label>식별 정보</label><span class="ro mono" id="wp-id" style="font-size:11px"></span></div>
+    <div class="modal-row"><label>이름 *</label><input type="text" id="wp-label" maxlength="255" placeholder="예: 5L_2차_믹서_하부"></div>
+    <div class="modal-row"><label>위치</label><input type="text" id="wp-location" placeholder="자유 텍스트"></div>
+    <div class="modal-row"><label>비고</label><textarea id="wp-notes" rows="3"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" data-modal-close="modal-waypoint">취소</button>
+      <button class="btn btn-danger" id="wp-delete" style="margin-right:auto;display:none;">라벨 삭제</button>
+      <button class="btn btn-primary" id="wp-save">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/admin/static/js/admin.js"></script>
+</body>
+</html>

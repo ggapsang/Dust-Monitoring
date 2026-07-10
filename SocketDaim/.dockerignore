@@ -1,0 +1,33 @@
+# 빌드 컨텍스트에서 제외 — 이미지에 불필요하고 전송만 느리게 하는 것들.
+# (특히 .git 가 수백 MB → 서비스마다 통째로 전송돼 빌드가 느려짐)
+
+# VCS
+.git
+.gitignore
+.dockerignore
+
+# Python 캐시 / 가상환경
+**/__pycache__/
+**/*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# 로컬 시크릿 / env
+.env
+.env.*
+
+# air-gap / 빌드 산출물
+*.tar
+*.tar.gz
+*.zip
+dist/
+images/
+
+# 런타임에 bind-mount 되는 데이터(이미지에 넣지 않음)
+storage/
+media/
+
+# 문서/대용량 비-빌드 파일
+*.pdf

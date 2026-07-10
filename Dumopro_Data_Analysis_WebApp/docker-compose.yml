@@ -1,0 +1,8 @@
+# Thin root-level compose wrapper.
+# 실제 서비스 정의는 docker/docker-compose.yml에 있고 이 파일은 얇게 감쌉니다.
+# 이 파일이 존재하면 루트에서 `docker compose up -d --build` 하나로 기동 가능.
+#
+# 세부 사용법/전제 조건은 docker/docker-compose.yml 상단 주석 참조.
+
+include:
+  - docker/docker-compose.yml

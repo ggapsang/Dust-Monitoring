@@ -1,0 +1,11 @@
+# 로컬 테스트 전용 오버라이드 — AnalysisReceiver 없이 데모 응답 + storage 실제 경로.
+services:
+  poolertran:
+    environment:
+      PT_REST_DEMO: "true"          # AnalysisReceiver 미배포 → 더미 응답으로 decision_record 생성
+      PT_REST_DEMO_VERSION: "2"     # waypoint별 (정적,동적) 프로필 — 4개 시나리오 검증용
+      PT_API_LOGGING: "true"        # REST 호출 입력/출력 로깅(로컬 테스트)
+      PT_PATH_REMAP_FROM: "/data/storage"                              # 컨테이너 경로 prefix
+      PT_PATH_REMAP_TO: "/home/duckking/echopro/SocketDaim/storage"    # → 이 기기 호스트 실제 경로
+    volumes:
+      - /home/duckking/echopro/SocketDaim/storage:/data/storage:ro

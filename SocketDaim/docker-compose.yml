@@ -1,0 +1,292 @@
+# SocketDaim Gateway – Development compose file
+# ----------------------------------------------
+# Services owned here:
+#   postgres        Shared storage DB     (host port 2345 → 5432)
+#   ingestion-gw    Ingestion Gateway     (TCP 9000, no HTTP)
+#   egress-gw       Egress Gateway        (decision_db → LOAS 측 송출)
+#   admin-ui        SocketDaim Admin UI   (HTTP 9108, gw_admin role)
+#   cleaner         Retention enforcer    (no port, gw_cleaner role; 매일 03:00 KST)
+#
+# Externally owned (Decision Agent repo, c:\decision_agent\docker-compose.yml):
+#   postgres-decision   Decision DB       (host port 2346 → 5432)
+#   decision-agent      Decision Agent    (admin 9107)
+#   These join `gw-net` as external — bring them up *after* this compose.
+#
+# Boot order (dev):
+#   1. cd C:\SocketDaim     && docker compose up -d   # creates `gw-net`
+#   2. cd C:\decision_agent && docker compose up -d   # joins `gw-net`
+# Tear down in reverse.
+#
+# Bring up:      docker compose up
+# Bring down:    docker compose down
+# Wipe DB vols:  docker compose down -v
+
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: sd-postgres
+    environment:
+      POSTGRES_DB: gateway_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev_root_pw          # superuser – dev only
+    # 메모리 한도(4G) 안에서 안전하게 동작하도록 postgres 내부 메모리 캡 설정.
+    # 단일 AMR · 1 fps 환경 기준 — 1~2년 운영에 충분.
+    # shared_buffers=1G (25%), effective_cache_size=3G (75%),
+    # work_mem=32MB, maintenance_work_mem=256MB, max_connections=30.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=30
+    ports:
+      - "2345:5432"                           # host port 2345 per plan §5.3
+    volumes:
+      - ./init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+      # seed_test_stations.sql 마운트는 제거됨.  4개 샘플 station은
+      # admin-ui (http://localhost:9108/) [샘플 4개 생성] 버튼으로 생성.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gateway_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  ingestion-gw:
+    build:
+      context: .
+      dockerfile: ingestion_gateway/Dockerfile
+    container_name: sd-ingestion-gw
+    # 호스트 사용자(daim, uid 1000)와 동일 권한으로 실행 — 컨테이너가 만든 영상
+    # 파일을 호스트 GUI 파일 탐색기에서 sudo 없이 바로 열람·이동할 수 있게 한다.
+    user: "1000:1000"
+    environment:
+      IGW_TCP_HOST: "0.0.0.0"
+      # ---- Protocol selector -----------------------------------------
+      # "loas" (default)  → dual listener on 13310 (DUST) + 13320 (CCTV);
+      #                     IGW_TCP_PORT (9000) is ignored.
+      # "standard"        → legacy gw_proto on IGW_TCP_PORT (9000), for
+      #                     MockSensor / Dumopro analysis flow.
+      IGW_PROTOCOL: "loas"
+      IGW_TCP_PORT: "9000"                    # only used when PROTOCOL=standard
+      IGW_DB_HOST: "postgres"
+      IGW_DB_PORT: "5432"
+      IGW_DB_NAME: "gateway_db"
+      IGW_DB_USER: "gw_writer"
+      IGW_DB_PASSWORD: "dev_writer_pw"
+      IGW_STORAGE_ROOT: "/data/storage"
+      IGW_LOG_LEVEL: "INFO"
+      IGW_LOG_FORMAT: "json"
+      # ---- LOAS Tfoi v4a (single-AMR) overrides ----------------------
+      # Defaults below match the application defaults and are listed for
+      # visibility only — uncomment to override.
+      # IGW_LOAS_DUST_PORT: "13310"
+      # IGW_LOAS_CCTV_PORT: "13320"
+      # IGW_LOAS_AMR_ID: "amr-01"
+      # IGW_LOAS_EXPECTED_AMR_IP: ""             # advisory only
+      # IGW_LOAS_WINDOW_BEFORE_SEC: "2.0"
+      # IGW_LOAS_WINDOW_AFTER_SEC:  "2.0"
+      # IGW_LOAS_CORRELATOR_INTERVAL_SEC: "10.0"
+      # IGW_LOAS_LOOKBACK_SEC: "600.0"
+      # ---- DUST raw-XML dump (디버깅, default off) -------------------
+      # 활성화 시 ./storage/dust_dump/{YYYY-MM-DD}/{HH}/{epoch_us}_wpN.xml
+      # 로 매 INTERVAL_SEC 마다 1개 파일 저장.  DB 의 raw_xml 컬럼은
+      # 본 옵션과 무관하게 항상 채워짐.
+      # IGW_LOAS_DUST_DUMP_ENABLED: "true"
+      # IGW_LOAS_DUST_DUMP_INTERVAL_SEC: "1.0"
+      # IGW_LOAS_DUST_DUMP_SUBDIR: "dust_dump"
+    ports:
+      - "13310:13310"                         # loas DUST  (사용자 분진 mock 송신 대상)
+      - "13320:13320"                           # loas CCTV  (MockImages 송신 대상)
+      - "9000:9000"                           # standard   (idle when PROTOCOL=loas)
+    volumes:
+      # bind mount: 호스트의 ./storage/ ↔ 컨테이너의 /data/storage/.
+      # GUI 파일 탐색기로 ~/projects/SocketDaim/storage/videos/...에 직접 접근 가능.
+      - ./storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 256M
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  # ---- Egress Gateway -----------------------------------------------------
+  # decision_agent 의 decision_db 에서 판정 완료 행을 polling → dust_id 로
+  # gateway_db.dust_inspection 24컬럼 조인 → LOAS MariaDB t_inspection 에 INSERT.
+  # (LOAS 권한 Insert+Select → upsert 불가, 순수 INSERT.)  실제 LOAS 접속값은
+  # 시크릿으로 주입(레포에 평문 금지).  미가용 시 retry(데이터 유실 없음).
+
+  egress-gw:
+    build:
+      context: .
+      dockerfile: egress_gateway/Dockerfile
+    container_name: sd-egress-gw
+    restart: unless-stopped
+    environment:
+      # 타깃: LOAS MariaDB t_inspection (← 실제 엔드포인트/계정/비번 시크릿 주입)
+      #   spec: tfoi_web_db_v1.t_inspection @ 10.5.21.141:3306 (Allowed Client IP 10.5.20.160)
+      EGW_TARGET_DB_HOST: "loas-mariadb"          # ← 실제 IP 로 주입
+      EGW_TARGET_DB_PORT: "3306"
+      EGW_TARGET_DB_NAME: "tfoi_web_db_v1"
+      EGW_TARGET_DB_TABLE: "t_inspection"
+      EGW_TARGET_DB_USER: "loas_writer"           # ← 실제 계정 주입
+      EGW_TARGET_DB_PASSWORD: "CHANGE_ME"         # ← 시크릿 주입(레포에 평문 금지)
+      # 디버깅: 기본값 true → t_inspection 으로 실행되는 INSERT 전체 구문을 로그로 남김.
+      # (로컬 mock MariaDB 및 접속계정은 docker-compose.override.yml 로 주입 — gitignore)
+      EGW_SQL_LOG_ENABLE: "true"
+      # 조건부 INSERT: 허용 event_id 만 t_inspection 에 적재(normal=0/caution=1/warning=2/danger=3).
+      #   "0,1,2,3"=전부 적재(기본).  "2,3"=warning/danger 만.  "2"=warning 만.
+      EGW_EVENT_ID_FILTER: "0,1,2,3"
+      # 소스1: decision_db (egress_role) — 판정
+      EGW_DB_HOST: "postgres-decision"
+      EGW_DB_PORT: "5432"
+      EGW_DB_NAME: "decision_db"
+      EGW_DB_USER: "egress_role"
+      EGW_DB_PASSWORD: "dev_egress_pw"
+      # 소스2: gateway_db (gw_reader) — dust_inspection 24컬럼
+      EGW_GW_DB_HOST: "postgres"
+      EGW_GW_DB_PORT: "5432"
+      EGW_GW_DB_NAME: "gateway_db"
+      EGW_GW_DB_USER: "gw_reader"
+      EGW_GW_DB_PASSWORD: "dev_reader_pw"
+      EGW_POLL_INTERVAL_SEC: "5"
+      EGW_BATCH_SIZE: "100"
+      EGW_OUTBOX_PATH: "/data/outbox.db"
+      EGW_LOG_LEVEL: "INFO"
+      EGW_LOG_FORMAT: "json"
+    volumes:
+      - egress-data:/data
+    # postgres-decision 은 Decision Agent compose 가 소유 — 여기선 depends_on
+    # 못 검. poller 가 connect 실패하면 그냥 retry.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    networks:
+      - gw-net
+
+  # ---- Admin UI ------------------------------------------------------------
+  # gw_admin 롤로 station 테이블 CRUD + station_request 트리아지를 제공한다.
+  # Win9x/2000 톤의 어드민 페이지: http://localhost:9108/
+
+  admin-ui:
+    build:
+      context: .
+      dockerfile: admin_ui/Dockerfile
+    container_name: sd-admin-ui
+    environment:
+      SDA_HTTP_HOST: "0.0.0.0"
+      SDA_HTTP_PORT: "9108"
+      SDA_DB_HOST: "postgres"
+      SDA_DB_PORT: "5432"
+      SDA_DB_NAME: "gateway_db"
+      SDA_DB_USER: "gw_admin"
+      SDA_DB_PASSWORD: "dev_admin_pw"
+      SDA_STORAGE_ROOT: "/data/storage"
+      SDA_DISK_WARN_PERCENT: "80"
+      SDA_DISK_CRITICAL_PERCENT: "90"
+      SDA_LOG_LEVEL: "INFO"
+      SDA_LOG_FORMAT: "json"
+    ports:
+      - "9108:9108"
+    # 디스크 사용량 측정용으로만 사용하므로 read-only로 마운트.
+    volumes:
+      - ./storage:/data/storage:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    restart: unless-stopped
+    networks:
+      - gw-net
+
+  # ---- sd-cleaner ----------------------------------------------------------
+  # gateway_plan.md §9.3 retention 정책을 매일 03:00 KST에 자동 적용.
+  # gw_cleaner 롤(SELECT + DELETE on video/sensor_sample/ingestion_log)로 동작.
+  # storage는 ingestion-gw와 동일한 bind mount를 rw로 받아 파일 unlink까지 수행.
+  # 수동 실행이 필요하면:
+  #   docker exec sd-cleaner python -m cleaner.main --once
+
+  cleaner:
+    build:
+      context: .
+      dockerfile: cleaner/Dockerfile
+    container_name: sd-cleaner
+    # 호스트 daim(1000)으로 실행 → bind mount된 ./storage 파일 unlink 권한 확보
+    user: "1000:1000"
+    environment:
+      SDC_DB_HOST: "postgres"
+      SDC_DB_PORT: "5432"
+      SDC_DB_NAME: "gateway_db"
+      SDC_DB_USER: "gw_cleaner"
+      SDC_DB_PASSWORD: "dev_cleaner_pw"
+      SDC_STORAGE_ROOT: "/data/storage"
+      SDC_VIDEO_NORMAL_DAYS: "14"
+      SDC_VIDEO_ANOMALY_DAYS: "180"
+      SDC_SENSOR_DAYS: "180"
+      SDC_INGESTION_LOG_DAYS: "180"
+      SDC_RUN_AT_HOUR_KST: "3"
+      SDC_RUN_AT_MINUTE_KST: "0"
+      SDC_BATCH_SIZE: "200"
+      # 디스크 압박 시 안전장치 (nightly 14일 정책으로는 못 막는 부하 폭주 대비).
+      # storage 사용률이 SDC_EMERGENCY_PURGE_AT_PERCENT를 넘으면 label/나이
+      # 무시하고 captured_at 오래된 순으로 SDC_EMERGENCY_TARGET_PERCENT까지 삭제.
+      SDC_EMERGENCY_PURGE_AT_PERCENT: "85"
+      SDC_EMERGENCY_TARGET_PERCENT: "70"
+      SDC_DISK_CHECK_INTERVAL_SEC: "300"
+      SDC_LOG_LEVEL: "INFO"
+      SDC_LOG_FORMAT: "json"
+    volumes:
+      - ./storage:/data/storage          # unlink 필요 → rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    networks:
+      - gw-net
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  # video-storage는 더 이상 named volume이 아니라 호스트 ./storage/ bind mount.
+  # 호스트 GUI 탐색기 접근이 필요해 named volume(/var/lib/docker/...,
+  # root 소유) 대신 사용자 home 안의 폴더로 옮겼다.
+  egress-data:
+
+networks:
+  gw-net:
+    driver: bridge
